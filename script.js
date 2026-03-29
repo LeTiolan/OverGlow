@@ -105,7 +105,7 @@ let gameTime = 0;
 let score = 0;
 let shakeTime = 0;
 
-let player, projectiles, enemies, particles, texts;
+let player, projectiles, enemies, particles, texts, drops;
 
 class Player {
     constructor() {
@@ -121,6 +121,8 @@ class Player {
         this.novaCd = 0; this.maxNovaCd = 5;
         this.shieldCd = 0; this.maxShieldCd = 8;
         this.shieldTime = 0; 
+        this.inventory = [];
+        this.maxInventory = 30;
     }
     update(dt) {
         if(this.dashCd > 0) this.dashCd -= dt;
@@ -268,6 +270,21 @@ class FloatingText {
         c.globalAlpha = 1; c.shadowBlur = 0;
     }
 }
+class Drop {
+    constructor(x, y, type) {
+        this.x = x; this.y = y; this.r = 6;
+        this.type = type; // 'health', 'energy', 'core'
+        this.life = 10; // Disappears after 10 seconds
+        this.color = type === 'health' ? '#ff4444' : type === 'energy' ? '#44ccff' : '#ffcc00';
+    }
+    update(dt) { this.life -= dt; }
+    draw(c) {
+        c.globalAlpha = Math.max(0, this.life / 10);
+        c.beginPath(); c.arc(this.x, this.y, this.r, 0, Math.PI*2);
+        c.fillStyle = this.color; c.shadowBlur = 10; c.shadowColor = this.color;
+        c.fill(); c.shadowBlur = 0; c.globalAlpha = 1;
+    }
+}
 
 /**
  * SYSTEMS & LOGIC
@@ -326,11 +343,18 @@ function updateGame(dt) {
                 sfx.hit();
                 projectiles.splice(i, 1);
                 
-                if(e.hp <= 0) {
+             if(e.hp <= 0) {
                     spawnParticles(e.x, e.y, e.color, 15);
                     score += (e.type === 'tank' ? 50 : e.type === 'fast' ? 20 : 10);
                     player.gainXp(e.type === 'tank' ? 40 : 15);
                     sfx.kill();
+                    
+                    // 30% chance to drop loot on death
+                    if(Math.random() < 0.3) {
+                        let dropType = Math.random() < 0.4 ? 'health' : (Math.random() < 0.8 ? 'energy' : 'core');
+                        drops.push(new Drop(e.x, e.y, dropType));
+                    }
+                    
                     enemies.splice(j, 1);
                     shake(0.05);
                 }
@@ -354,6 +378,25 @@ function updateGame(dt) {
             shake(0.2);
             enemies.splice(i, 1);
             if(player.hp <= 0) gameOver();
+        }
+    }
+    // Loot Drop Updates
+    for(let i = drops.length-1; i>=0; i--) {
+        let d = drops[i];
+        d.update(dt);
+        if(d.life <= 0) { drops.splice(i, 1); continue; }
+        
+        // Pick up collision (with a slight magnet radius of 20px)
+        if(Math.hypot(player.x - d.x, player.y - d.y) < player.r + d.r + 20) { 
+            if(d.type === 'health') { player.hp = Math.min(player.maxHp, player.hp + 25); }
+            if(d.type === 'energy') { player.energy = Math.min(player.maxEnergy, player.energy + 40); }
+            if(d.type === 'core' && player.inventory.length < player.maxInventory) {
+                player.inventory.push('core');
+                updateInventoryUI();
+            }
+            spawnText(d.x, d.y, d.type === 'core' ? "CORE" : "+STAT", d.color, 16);
+            playTone(800, 'sine', 0.1, 0.05, 400); // Pickup sound
+            drops.splice(i, 1);
         }
     }
 
@@ -388,6 +431,7 @@ function drawGame() {
     });
 
     projectiles.forEach(p => p.draw(ctx));
+    drops.forEach(d => d.draw(ctx));
     enemies.forEach(e => e.draw(ctx));
     player.draw(ctx);
     
@@ -427,11 +471,24 @@ function gameLoop(timestamp) {
     }
     requestAnimationFrame(gameLoop);
 }
+function updateInventoryUI() {
+    let slots = document.querySelectorAll('#inv-grid .slot');
+    slots.forEach((slot, index) => {
+        if(index < player.inventory.length) {
+            slot.style.backgroundColor = '#ffcc00'; // Fill slot with glowing gold
+            slot.style.boxShadow = '0 0 10px #ffcc00';
+        } else {
+            slot.style.backgroundColor = 'rgba(0,0,0,0.5)'; // Empty slot
+            slot.style.boxShadow = 'none';
+        }
+    });
+}
 
 function startGame() {
     initAudio();
     player = new Player();
-    projectiles = []; enemies = []; particles = []; texts = [];
+   projectiles = []; enemies = []; particles = []; texts = []; drops = [];
+    updateInventoryUI();
     score = 0; gameTime = 0; lastTime = performance.now();
     gameState = 'playing';
     dom.start.classList.add('hidden');
