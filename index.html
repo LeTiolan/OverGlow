@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Survivor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <canvas id="bgCanvas"></canvas>
+    <canvas id="gameCanvas"></canvas>
+    <canvas id="fxCanvas"></canvas>
+
+    <div id="ui-layer">
+        <div id="hud-top" class="panel hidden">
+            <div>
+                <div>HP: <span id="hp-text">100</span></div>
+                <div class="stat-bar"><div class="stat-fill hp" id="hp-bar"></div></div>
+            </div>
+            <div>
+                <div>Energy: <span id="en-text">100</span></div>
+                <div class="stat-bar"><div class="stat-fill energy" id="en-bar"></div></div>
+            </div>
+            <div>
+                <div>Level: <span id="lvl-text">1</span> (XP: <span id="xp-text">0</span>)</div>
+                <div class="stat-bar"><div class="stat-fill xp" id="xp-bar"></div></div>
+            </div>
+            <div>
+                <div>Score: <span id="score-text">0</span></div>
+                <div>Time: <span id="time-text">0:00</span></div>
+            </div>
+            <div><small>WASD to move, Mouse to aim/shoot. Press 'I' for Inventory</small></div>
+        </div>
+
+        <div id="start-screen" class="panel">
+            <h1 style="text-shadow: 0 0 20px #44ccff;">NEON SURVIVOR</h1>
+            <p>Endless glowing arena shooter.</p>
+            <button id="start-btn">Initialize System</button>
+        </div>
+
+        <div id="game-over" class="panel hidden">
+            <h1 style="color: #ff4444; text-shadow: 0 0 20px #ff4444;">SYSTEM FAILURE</h1>
+            <p>Score: <span id="final-score">0</span></p>
+            <p>Time Survived: <span id="final-time">0</span></p>
+            <button id="restart-btn">Reboot System</button>
+        </div>
+
+        <div id="inventory-panel" class="panel hidden">
+            <h2>Inventory</h2>
+            <div class="grid" id="inv-grid"></div>
+            <p style="font-size: 12px; color: #aaa;">(Press 'I' to close)</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
