@@ -27,15 +27,21 @@ const dom = {
     hpBar: document.getElementById('hp-bar'),
     enBar: document.getElementById('en-bar'),
     xpBar: document.getElementById('xp-bar'),
-    score: document.getElementById('score-text'),
+   score: document.getElementById('score-text'),
     time: document.getElementById('time-text'),
-    lvl: document.getElementById('lvl-text')
+    lvl: document.getElementById('lvl-text'),
+    abBar: document.getElementById('abilities-bar'),
+    cdDash: document.getElementById('cd-dash'),
+    cdNova: document.getElementById('cd-nova'),
+    cdShield: document.getElementById('cd-shield')
 };
 
 // Generate 30 inventory slots visually
 for(let i=0; i<30; i++) {
     document.getElementById('inv-grid').innerHTML += '<div class="slot"></div>';
 }
+
+let novas = [];
 
 /**
  * PROCEDURAL AUDIO (Web Audio API)
@@ -48,7 +54,10 @@ const sfx = {
     levelUp: () => { 
         playTone(400, 'sine', 0.2, 0.05, 400); 
         setTimeout(()=>playTone(600, 'sine', 0.4, 0.05, 600), 100); 
-    }
+    },
+    dash: () => playTone(500, 'sine', 0.1, 0.05, -200),
+    nova: () => playTone(100, 'square', 0.3, 0.1, -50),
+    shield: () => playTone(600, 'triangle', 0.2, 0.05, 200)
 };
 
 function initAudio() {
@@ -106,49 +115,85 @@ class Player {
         this.energy = 100; this.maxEnergy = 100;
         this.xp = 0; this.lvl = 1; this.xpNeeded = 100;
         this.shootTimer = 0; this.fireRate = 0.15;
+        
+        // Ability Variables
+        this.dashCd = 0; this.maxDashCd = 2;
+        this.novaCd = 0; this.maxNovaCd = 5;
+        this.shieldCd = 0; this.maxShieldCd = 8;
+        this.shieldTime = 0; 
     }
     update(dt) {
-        // Movement
+        if(this.dashCd > 0) this.dashCd -= dt;
+        if(this.novaCd > 0) this.novaCd -= dt;
+        if(this.shieldCd > 0) this.shieldCd -= dt;
+        if(this.shieldTime > 0) this.shieldTime -= dt;
+
         let dx = 0, dy = 0;
         if(keys['w']) dy -= 1; if(keys['s']) dy += 1;
         if(keys['a']) dx -= 1; if(keys['d']) dx += 1;
-        if(dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; } // Normalize diagonal
-        this.x += dx * this.speed * dt;
-        this.y += dy * this.speed * dt;
+        if(dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; } 
         
-        // Bounds
+        let currentSpeed = this.speed;
+        if(keys[' '] && this.dashCd <= 0 && this.energy >= 15) {
+            this.energy -= 15; this.dashCd = this.maxDashCd;
+            sfx.dash(); spawnParticles(this.x, this.y, '#44ccff', 10);
+            this.x += dx * 150; this.y += dy * 150; 
+        }
+        
+        if(keys['q'] && this.novaCd <= 0 && this.energy >= 30) {
+            this.energy -= 30; this.novaCd = this.maxNovaCd;
+            sfx.nova(); shake(0.2);
+            novas.push({x: this.x, y: this.y, r: 15, life: 0.3, maxLife: 0.3});
+            
+            enemies.forEach(e => {
+                if(Math.hypot(this.x - e.x, this.y - e.y) < 150) {
+                    e.hp -= 50;
+                    spawnParticles(e.x, e.y, '#fff', 5);
+                    spawnText(e.x, e.y, 50, '#44ccff', 20);
+                }
+            });
+        }
+        
+        if(keys['e'] && this.shieldCd <= 0 && this.energy >= 40) {
+            this.energy -= 40; this.shieldCd = this.maxShieldCd;
+            this.shieldTime = 3; 
+            sfx.shield();
+        }
+
+        this.x += dx * currentSpeed * dt;
+        this.y += dy * currentSpeed * dt;
+        
         this.x = Math.max(this.r, Math.min(width - this.r, this.x));
         this.y = Math.max(this.r, Math.min(height - this.r, this.y));
-
-        // Energy Regen
         if(this.energy < this.maxEnergy) this.energy += 15 * dt;
 
-        // Shooting
         this.shootTimer -= dt;
         if(mouse.down && this.shootTimer <= 0 && this.energy >= 5) {
-            this.energy -= 5;
-            this.shootTimer = this.fireRate;
+            this.energy -= 5; this.shootTimer = this.fireRate;
             let angle = Math.atan2(mouse.y - this.y, mouse.x - this.x);
             projectiles.push(new Projectile(this.x, this.y, angle));
             sfx.shoot();
         }
     }
     draw(c) {
+        if(this.shieldTime > 0) {
+            c.beginPath(); c.arc(this.x, this.y, this.r + 10 + Math.sin(gameTime*10)*2, 0, Math.PI*2);
+            c.strokeStyle = 'rgba(68, 204, 255, 0.8)'; c.lineWidth = 3; c.shadowBlur = 10; c.shadowColor = '#44ccff';
+            c.stroke(); c.shadowBlur = 0;
+        }
         c.beginPath(); c.arc(this.x, this.y, this.r, 0, Math.PI*2);
         c.fillStyle = '#fff'; c.shadowBlur = 20; c.shadowColor = '#44ccff';
-        c.fill(); c.shadowBlur = 0; // Reset
+        c.fill(); c.shadowBlur = 0; 
     }
     gainXp(amount) {
         this.xp += amount;
         if(this.xp >= this.xpNeeded) {
             this.lvl++; this.xp -= this.xpNeeded; this.xpNeeded *= 1.5;
             this.maxHp += 20; this.hp = this.maxHp;
-            sfx.levelUp();
-            spawnText(this.x, this.y - 30, "LEVEL UP!", "#ffcc00", 24);
+            sfx.levelUp(); spawnText(this.x, this.y - 30, "LEVEL UP!", "#ffcc00", 24);
         }
     }
 }
-
 class Projectile {
     constructor(x, y, angle) {
         this.x = x; this.y = y; this.r = 4;
@@ -300,7 +345,11 @@ function updateGame(dt) {
         e.update(dt);
         let dist = Math.hypot(player.x - e.x, player.y - e.y);
         if(dist < player.r + e.r) {
-            player.hp -= 10;
+         if(player.shieldTime <= 0) {
+                player.hp -= 10;
+            } else {
+                spawnText(player.x, player.y, "BLOCKED", "#44ccff");
+            }
             spawnParticles(player.x, player.y, '#ff4444', 10);
             shake(0.2);
             enemies.splice(i, 1);
@@ -311,6 +360,12 @@ function updateGame(dt) {
     // Visual FX Updates
     particles.forEach((p, i) => { p.update(dt); if(p.life <= 0) particles.splice(i,1); });
     texts.forEach((t, i) => { t.update(dt); if(t.life <= 0) texts.splice(i,1); });
+    // Update Nova Rings
+    for(let i = novas.length-1; i>=0; i--) {
+        let n = novas[i];
+        n.r += 600 * dt; n.life -= dt;
+        if(n.life <= 0) novas.splice(i, 1);
+    }
 
     updateHUD();
 }
@@ -325,6 +380,12 @@ function drawGame() {
         ctx.save(); fxCtx.save();
         ctx.translate(sx, sy); fxCtx.translate(sx, sy);
     }
+    novas.forEach(n => {
+        ctx.globalAlpha = Math.max(0, n.life / n.maxLife);
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
+        ctx.strokeStyle = '#44ccff'; ctx.lineWidth = 5; ctx.shadowBlur = 15; ctx.shadowColor = '#44ccff';
+        ctx.stroke(); ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    });
 
     projectiles.forEach(p => p.draw(ctx));
     enemies.forEach(e => e.draw(ctx));
@@ -349,6 +410,10 @@ function updateHUD() {
     let m = Math.floor(gameTime / 60);
     let s = Math.floor(gameTime % 60).toString().padStart(2, '0');
     dom.time.innerText = `${m}:${s}`;
+
+    dom.cdDash.style.height = `${(player.dashCd / player.maxDashCd) * 100}%`;
+    dom.cdNova.style.height = `${(player.novaCd / player.maxNovaCd) * 100}%`;
+    dom.cdShield.style.height = `${(player.shieldCd / player.maxShieldCd) * 100}%`;
 }
 
 function gameLoop(timestamp) {
@@ -372,6 +437,7 @@ function startGame() {
     dom.start.classList.add('hidden');
     dom.over.classList.add('hidden');
     dom.hud.classList.remove('hidden');
+    dom.abBar.classList.remove('hidden');
 }
 
 function gameOver() {
